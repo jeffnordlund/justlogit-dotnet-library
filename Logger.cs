@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http;
 using System.Diagnostics;
+using System.Dynamic;
+
+using Newtonsoft.Json;
+
 
 namespace JustLogIt.Nuget.Library {
   public class Logger {
@@ -23,18 +27,27 @@ namespace JustLogIt.Nuget.Library {
 
     public static void LogError(Exception exception, string Detail = null, string UserIdentifier = null, Dictionary<string, string> details = null) {
       try {
-        List<string> values = new List<string>();
-        values.Add("\"message\":\"" + EscapeString(exception.Message) + "\"");
-        values.Add("\"stack\":\"" + EscapeString(exception.StackTrace) + "\"");
-        values.Add("\"details\":\"" + EscapeString(Detail) + "\"");
-
+        dynamic item = new ExpandoObject();
+        item.message = exception.Message;
+        item.stack = exception.StackTrace;
+        item.details = Detail;
+        if (!String.IsNullOrEmpty(UserIdentifier)) item.user = UserIdentifier;
+        
         if (null != details) {
-          foreach (string key in details.Keys) {
-            values.Add("\"" + key.Replace("\"", "") + "\":\"" + EscapeString(details[key]) + "\"");
+          var dict = item as IDictionary<string, Object>;
+          if (null != dict) {
+            foreach (string key in details.Keys) {
+              if (dict.ContainsKey(key)) {
+                dict[key] = details[key];
+              }
+              else {
+                dict.Add(key, details[key]);
+              }
+            }
           }
         }
 
-        string output = "{" + String.Join(",", values) + "}";
+        string output = JsonConvert.SerializeObject(item);
         _queue.Enqueue(new JustLogIt.Nuget.Library.QueueItem() {
           Method = "error",
           Details = output
